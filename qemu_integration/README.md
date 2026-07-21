@@ -98,6 +98,33 @@ the administrator to pre-create TAP interfaces for multi-VM MPI workloads.
 read and write `/dev/kvm`, otherwise it falls back to TCG. Set `QEMU_ACCEL=kvm`
 to require hardware acceleration or `QEMU_ACCEL=tcg` to force emulation.
 
+## Guest memory modes
+
+`OCEAN_MEMORY_MODE` selects how the additional guest memory is exposed:
+
+- `legomem-numa` (default) preserves the LegoMem NUMA backend. In the current
+  QEMU implementation this creates a memory-only NUMA node and carries the
+  server metadata, but it does not yet forward guest load/store operations to
+  the direct LegoMem TCP API.
+- `cxl` exposes `CXL_MEMORY` (default: `LEGOMEM_NODE_SIZE`) through a CXL Type-3
+  device. It uses job/rank-specific files below `/dev/shm`, so creating the CXL
+  topology does not require root. This mode validates the guest CXL/DAX stack;
+  it does not by itself establish LegoMem TCP offloading.
+
+For a single rootless CXL VM:
+
+```bash
+OCEAN_MEMORY_MODE=cxl \
+OCEAN_NET_MODE=user \
+QEMU_ACCEL=auto \
+bash qemu_integration/launch_qemu_legomem.sh
+```
+
+The CXL runtime directory defaults to
+`/dev/shm/ocean-cxl-${SLURM_JOB_ID:-manual}-${CXL_HOST_ID:-0}`. Override
+`CXL_RUNTIME_DIR`, `CXL_BACKING_PATH`, or `CXL_LSA_PATH` when a different local
+backing location is required.
+
 ## Server
 
 Start the memory server:

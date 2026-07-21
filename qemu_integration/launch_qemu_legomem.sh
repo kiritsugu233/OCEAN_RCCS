@@ -19,6 +19,7 @@ VM_TOTAL_MEMORY=${VM_TOTAL_MEMORY:-5G}
 VM_MAX_MEMORY=${VM_MAX_MEMORY:-16G}
 QEMU_ACCEL=${QEMU_ACCEL:-auto}
 OCEAN_NET_MODE=${OCEAN_NET_MODE:-tap}
+OCEAN_MEMORY_MODE=${OCEAN_MEMORY_MODE:-legomem-numa}
 TAP_IFACE=${TAP_IFACE:-tap0}
 VM_MAC=${VM_MAC:-52:54:00:00:00:01}
 export LEGOMEM_SERVER_HOST=${LEGOMEM_SERVER_HOST:-127.0.0.1}
@@ -30,6 +31,57 @@ echo "  QEMU binary: ${QEMU_BINARY}"
 echo "  LegoMem server: ${LEGOMEM_SERVER_HOST}:${LEGOMEM_SERVER_PORT}"
 echo "  LegoMem region: ${LEGOMEM_REGION_ID}"
 echo "  NUMA size: ${LEGOMEM_NODE_SIZE}"
+echo "  Guest memory mode: ${OCEAN_MEMORY_MODE}"
+
+machine_args=()
+memory_args=()
+kernel_append="root=/dev/vda rw console=ttyS0,115200 nokaslr"
+
+case "$OCEAN_MEMORY_MODE" in
+    legomem-numa)
+        machine_args=(-machine q35)
+        memory_args=(
+            -m "$VM_TOTAL_MEMORY,slots=8,maxmem=$VM_MAX_MEMORY"
+            -object "memory-backend-ram,id=ram-node0,size=$VM_BASE_MEMORY"
+            -numa node,nodeid=0,cpus=0-3,memdev=ram-node0
+            -object "memory-backend-legomem,id=legomem-node1,size=$LEGOMEM_NODE_SIZE,server=$LEGOMEM_SERVER_HOST,port=$LEGOMEM_SERVER_PORT,region-id=$LEGOMEM_REGION_ID"
+            -numa node,nodeid=1,memdev=legomem-node1
+        )
+        ;;
+    cxl)
+        CXL_MEMORY=${CXL_MEMORY:-$LEGOMEM_NODE_SIZE}
+        CXL_LSA_SIZE=${CXL_LSA_SIZE:-2M}
+        CXL_HOST_ID=${CXL_HOST_ID:-${SLURM_PROCID:-0}}
+        CXL_RUNTIME_DIR=${CXL_RUNTIME_DIR:-/dev/shm/ocean-cxl-${SLURM_JOB_ID:-manual}-${CXL_HOST_ID}}
+        CXL_BACKING_PATH=${CXL_BACKING_PATH:-$CXL_RUNTIME_DIR/cxl-mem.raw}
+        CXL_LSA_PATH=${CXL_LSA_PATH:-$CXL_RUNTIME_DIR/cxl-lsa.raw}
+
+        mkdir -p "$CXL_RUNTIME_DIR"
+        truncate -s "$CXL_MEMORY" "$CXL_BACKING_PATH"
+        truncate -s "$CXL_LSA_SIZE" "$CXL_LSA_PATH"
+
+        machine_args=(-machine q35,cxl=on)
+        memory_args=(
+            -m "$VM_BASE_MEMORY,slots=8,maxmem=$VM_MAX_MEMORY"
+            -object "memory-backend-ram,id=ram-node0,size=$VM_BASE_MEMORY"
+            -numa node,nodeid=0,cpus=0-3,memdev=ram-node0
+            -object "memory-backend-file,id=cxl-mem1,share=on,mem-path=$CXL_BACKING_PATH,size=$CXL_MEMORY"
+            -object "memory-backend-file,id=cxl-lsa1,share=on,mem-path=$CXL_LSA_PATH,size=$CXL_LSA_SIZE"
+            -device pxb-cxl,bus_nr=52,bus=pcie.0,id=cxl.1
+            -device cxl-rp,port=0,bus=cxl.1,id=cxl-rp0,chassis=0,slot=0
+            -device cxl-type3,bus=cxl-rp0,persistent-memdev=cxl-mem1,lsa=cxl-lsa1,id=cxl-pmem0,sn=0x1
+            -M "cxl-fmw.0.targets.0=cxl.1,cxl-fmw.0.size=$CXL_MEMORY"
+        )
+        kernel_append+=" cxl_region_size=$CXL_MEMORY"
+
+        echo "  CXL backing: ${CXL_BACKING_PATH}"
+        echo "  CXL LSA: ${CXL_LSA_PATH}"
+        ;;
+    *)
+        echo "Unsupported OCEAN_MEMORY_MODE=$OCEAN_MEMORY_MODE (expected legomem-numa or cxl)." >&2
+        exit 1
+        ;;
+esac
 
 net_args=()
 case "$OCEAN_NET_MODE" in
@@ -108,14 +160,10 @@ echo "  Accelerator: ${selected_accel}"
 exec "$QEMU_BINARY" \
     "${accel_args[@]}" \
     -smp 4 \
-    -machine q35 \
-    -m "$VM_TOTAL_MEMORY",slots=8,maxmem="$VM_MAX_MEMORY" \
-    -object memory-backend-ram,id=ram-node0,size="$VM_BASE_MEMORY" \
-    -numa node,nodeid=0,cpus=0-3,memdev=ram-node0 \
-    -object memory-backend-legomem,id=legomem-node1,size="$LEGOMEM_NODE_SIZE",server="$LEGOMEM_SERVER_HOST",port="$LEGOMEM_SERVER_PORT",region-id="$LEGOMEM_REGION_ID" \
-    -numa node,nodeid=1,memdev=legomem-node1 \
+    "${machine_args[@]}" \
+    "${memory_args[@]}" \
     -kernel "$KERNEL_IMAGE" \
-    -append "root=/dev/vda rw console=ttyS0,115200 nokaslr" \
+    -append "$kernel_append" \
     -drive file="$DISK_IMAGE",if=virtio,format=raw \
     "${net_args[@]}" \
     -fsdev local,security_model=none,id=fsdev0,path=/dev/shm \
