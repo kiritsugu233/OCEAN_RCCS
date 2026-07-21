@@ -12,13 +12,11 @@
 #ifndef LEGOMEM_PERF_H
 #define LEGOMEM_PERF_H
 
-#include <bpf/bpf.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <linux/bpf.h>
 #include <linux/perf_event.h>
 #include <map>
 #include <mutex>

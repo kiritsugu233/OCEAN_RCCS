@@ -81,3 +81,6 @@ add_test(NAME ci_vm_assets_tag_only
 
 add_test(NAME qemu_legomem_launcher
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_qemu_legomem_launcher.sh)
+
+add_test(NAME server_mode_no_libbpf
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_server_mode_no_libbpf.sh)
