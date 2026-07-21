@@ -92,7 +92,7 @@ case "$OCEAN_NET_MODE" in
             exit 1
         fi
         net_args=(-netdev "tap,id=net0,ifname=$TAP_IFACE,script=no,downscript=no"
-                  -device "virtio-net-pci,netdev=net0,mac=$VM_MAC")
+                  -device "virtio-net-pci,netdev=net0,mac=$VM_MAC,bus=pcie.0")
         ;;
     user)
         # libslirp runs in the QEMU process and needs no TAP device or
@@ -103,7 +103,7 @@ case "$OCEAN_NET_MODE" in
             user_netdev+=",hostfwd=${OCEAN_HOSTFWD}"
         fi
         net_args=(-netdev "$user_netdev"
-                  -device "virtio-net-pci,netdev=net0,mac=$VM_MAC")
+                  -device "virtio-net-pci,netdev=net0,mac=$VM_MAC,bus=pcie.0")
         ;;
     socket)
         # QEMU's UDP multicast socket backend gives VMs on allocated Slurm
@@ -114,7 +114,7 @@ case "$OCEAN_NET_MODE" in
             socket_netdev+=",localaddr=${OCEAN_SOCKET_LOCALADDR}"
         fi
         net_args=(-netdev "$socket_netdev"
-                  -device "virtio-net-pci,netdev=net0,mac=$VM_MAC")
+                  -device "virtio-net-pci,netdev=net0,mac=$VM_MAC,bus=pcie.0")
         ;;
     none)
         net_args=()

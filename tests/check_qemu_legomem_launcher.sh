@@ -23,3 +23,8 @@ if ! grep -q 'cxl-type3' "$LAUNCHER"; then
     echo "launcher cxl mode must expose a CXL Type-3 device" >&2
     exit 1
 fi
+
+if ! grep -q 'virtio-net-pci,netdev=net0,mac=\$VM_MAC,bus=pcie.0' "$LAUNCHER"; then
+    echo "launcher must keep virtio networking off the CXL-only bus" >&2
+    exit 1
+fi
