@@ -9,8 +9,9 @@ if ! grep -q "root=/dev/vda" "$LAUNCHER"; then
     exit 1
 fi
 
-if ! grep -q 'if=virtio' "$LAUNCHER"; then
-    echo "launcher must attach qemu.img as an explicit virtio disk" >&2
+if ! grep -q 'if=none,id=osdisk' "$LAUNCHER" ||
+   ! grep -q 'virtio-blk-pci,drive=osdisk,bus=pcie.0' "$LAUNCHER"; then
+    echo "launcher must attach qemu.img to virtio-blk on the PCIe root bus" >&2
     exit 1
 fi
 

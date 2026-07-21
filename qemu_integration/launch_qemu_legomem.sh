@@ -164,7 +164,8 @@ exec "$QEMU_BINARY" \
     "${memory_args[@]}" \
     -kernel "$KERNEL_IMAGE" \
     -append "$kernel_append" \
-    -drive file="$DISK_IMAGE",if=virtio,format=raw \
+    -drive file="$DISK_IMAGE",if=none,id=osdisk,format=raw \
+    -device virtio-blk-pci,drive=osdisk,bus=pcie.0 \
     "${net_args[@]}" \
     -fsdev local,security_model=none,id=fsdev0,path=/dev/shm \
     -device virtio-9p-pci,id=fs0,fsdev=fsdev0,mount_tag=hostshm,bus=pcie.0 \
