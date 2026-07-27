@@ -49,7 +49,7 @@ Phase 1 passes when:
 2. QEMU reports the TCP transport and connects to the server;
 3. the guest creates `/dev/dax0.0`;
 4. `daxctl list` reports `devdax`;
-5. a small aligned `mmap()` write/read test on `/dev/dax0.0` passes;
+5. an explicit scalar `mmap()` write/read test on `/dev/dax0.0` passes;
 6. neither QEMU nor the server reports SHM/PGAS timeout errors.
 
 ## 2. One-time Mac setup
@@ -425,7 +425,7 @@ QEMU=/home/users/u0001928/OCEAN_CXLMEMSIM/library/qemu/build-rccs-phase1/qemu-sy
 KERNEL=/home/users/u0001928/OCEAN_RCCS/assets/author-20260720/bzImage
 DISK=/home/users/u0001928/OCEAN_RCCS/assets/author-20260720/qemu.img
 
-CXL_DIR=/dev/shm/ocean-cxl-phase1-${SLURM_JOB_ID:-manual}
+CXL_DIR=/dev/shm/ocean-cxl-phase1-$RUN_ID
 CXL_MEM=$CXL_DIR/cxl-mem.raw
 CXL_LSA=$CXL_DIR/cxl-lsa.raw
 
@@ -477,6 +477,9 @@ After QEMU exits:
 ```bash
 kill "$SERVER_PID" 2>/dev/null || true
 wait "$SERVER_PID" 2>/dev/null || true
+
+rm -f "$CXL_MEM" "$CXL_LSA"
+rmdir "$CXL_DIR" 2>/dev/null || true
 ```
 
 ## 13. Guest checks
@@ -489,6 +492,13 @@ First collect state:
 echo "===== OS ====="
 cat /etc/os-release
 uname -a
+
+echo "===== CPU vector profile ====="
+if grep -qwE 'avx|avx2' /proc/cpuinfo; then
+  echo "GUEST_AVX_HIDDEN=FAIL"
+else
+  echo "GUEST_AVX_HIDDEN=PASS"
+fi
 
 echo "===== CXL ====="
 cxl list
@@ -515,7 +525,11 @@ dmesg |
 If `/dev/dax0.0` already exists, do not run `ndctl create-namespace`,
 `ndctl destroy-namespace`, or `daxctl reconfigure-device`.
 
-Run a small aligned devdax read/write test:
+Run a small devdax read/write test using explicit byte accesses. Do not use a
+Python slice, `memcpy()`, `memmove()`, or `memcmp()` for this acceptance test:
+glibc may implement those operations with a VEX-encoded `vmovdqu`, which the
+RCCS host KVM MMIO emulator cannot execute against the emulated CXL window.
+This test deliberately validates correctness rather than bandwidth.
 
 ```bash
 python3 - <<'PY'
@@ -535,9 +549,15 @@ try:
         prot=mmap.PROT_READ | mmap.PROT_WRITE,
     )
     try:
-        mapping[0:64] = pattern
-        observed = mapping[0:64]
-        print("DEVDAX_RESULT=PASS" if observed == pattern else "DEVDAX_RESULT=FAIL")
+        for index, value in enumerate(pattern):
+            mapping[index] = value
+
+        observed = bytes(mapping[index] for index in range(len(pattern)))
+        print(
+            "DEVDAX_SCALAR64_RESULT=PASS"
+            if observed == pattern
+            else "DEVDAX_SCALAR64_RESULT=FAIL"
+        )
         print("observed_hex=" + observed.hex())
     finally:
         mapping.close()
@@ -546,8 +566,55 @@ finally:
 PY
 ```
 
-Start with this single-cacheline test. Do not run the legacy million-iteration
-`test_cxl_mem` yet.
+Expected:
+
+```text
+DEVDAX_SCALAR64_RESULT=PASS
+observed_hex=000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f
+```
+
+Start with this single-cacheline scalar test. Do not run the legacy
+million-iteration `test_cxl_mem` or a vectorized bandwidth benchmark in Phase
+1.
+
+After leaving the guest and stopping QEMU, validate the host logs:
+
+```bash
+grep -F \
+  "Communication Mode: TCP" \
+  "$RUN_DIR/server-runtime.log"
+
+grep -F \
+  "Accepted new client connection" \
+  "$RUN_DIR/server-runtime.log"
+
+grep -F \
+  "CXL Type3: CXLMemSim TCP mode - 127.0.0.1:9999" \
+  "$RUN_DIR/qemu-runtime.log"
+
+grep -F \
+  "CXL Type3: Successfully connected to CXLMemSim" \
+  "$RUN_DIR/qemu-runtime.log"
+
+grep -F \
+  "GUEST_AVX_HIDDEN=PASS" \
+  "$RUN_DIR/qemu-runtime.log"
+
+grep -F \
+  "DEVDAX_SCALAR64_RESULT=PASS" \
+  "$RUN_DIR/qemu-runtime.log"
+
+if grep -Ei \
+  'SHM (server not ready|slot busy|response) timeout|PGAS.*timeout' \
+  "$RUN_DIR/qemu-runtime.log" \
+  "$RUN_DIR/server-runtime.log"; then
+  echo "PHASE1_TIMEOUT_RESULT=FAIL"
+else
+  echo "PHASE1_TIMEOUT_RESULT=PASS"
+fi
+```
+
+All six positive checks plus `PHASE1_TIMEOUT_RESULT=PASS` close Phase 1.
 
 ## 14. Return logs to the Mac
 
