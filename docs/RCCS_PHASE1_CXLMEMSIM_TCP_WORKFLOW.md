@@ -413,6 +413,13 @@ Keep this process running while QEMU is active.
 Use the complete image already stored in `OCEAN_RCCS`. The backing and LSA
 files are separate from the TCP server and are private to this run.
 
+The Phase 1 KVM correctness profile deliberately hides AVX and AVX2 from the
+guest.  With the legacy `qemu64,+avx,+avx2` profile, glibc selects a
+`vmovdqu` memcpy implementation; KVM injects `#UD` when that vector store
+targets the emulated CXL devdax/MMIO window. Scalar devdax accesses work and
+the full server receives the corresponding TCP operations. Keep this
+workaround separate from later performance evaluation.
+
 ```bash
 QEMU=/home/users/u0001928/OCEAN_CXLMEMSIM/library/qemu/build-rccs-phase1/qemu-system-x86_64
 KERNEL=/home/users/u0001928/OCEAN_RCCS/assets/author-20260720/bzImage
@@ -435,7 +442,7 @@ set -o pipefail
 
 "$QEMU" \
   --enable-kvm \
-  -cpu qemu64,+xsave,+rdtscp,+avx,+avx2,+sse4.1,+sse4.2,+clflushopt \
+  -cpu qemu64,+rdtscp,+sse4.1,+sse4.2,+clflushopt,-avx,-avx2 \
   -smp 4 \
   -machine q35,cxl=on \
   -m 4G,slots=8,maxmem=16G \
