@@ -341,6 +341,9 @@ cd build-rccs-phase1
   --target-list=x86_64-softmmu \
   --enable-kvm \
   --enable-slirp \
+  --disable-u2f \
+  --disable-libudev \
+  --disable-libdw \
   --disable-docs \
   --disable-werror \
   2>&1 |
