@@ -44,6 +44,16 @@ set_target_properties(cxlmemsim_latency PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+# Standalone tensor/KV-block replay core.  This target deliberately has no
+# QEMU, TCP, ROB, spdlog, or cxxopts dependency so that LLM transfer traces can
+# be modeled in isolation and in minimal CI environments.
+add_library(llm_transfer_model STATIC src/llm_transfer_model.cpp)
+target_include_directories(llm_transfer_model PUBLIC include)
+
+add_executable(llm_transfer_replay src/llm_transfer_replay.cpp)
+target_include_directories(llm_transfer_replay PRIVATE include)
+target_link_libraries(llm_transfer_replay PRIVATE llm_transfer_model)
+
 # Server library (shared between server executable and tests)
 set(SERVER_LIB_SOURCES src/shared_memory_manager.cc src/shm_communication.cpp src/distributed_server.cpp src/tcp_communication.cpp src/hdm_decoder.cpp src/coherency_engine.cpp)
 add_library(cxlmemsim_server_lib STATIC ${SERVER_LIB_SOURCES})
@@ -56,7 +66,7 @@ target_include_directories(cxlmemsim_server PRIVATE include src ${cxxopts_INCLUD
 target_link_libraries(cxlmemsim_server cxlmemsim_server_lib cxlmemsim cxxopts::cxxopts spdlog::spdlog_header_only rt)
 
 # Installation targets
-install(TARGETS cxlmemsim_server
+install(TARGETS cxlmemsim_server llm_transfer_replay
         RUNTIME DESTINATION bin)
 
 install(FILES include/tcp_communication.h
