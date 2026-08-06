@@ -85,6 +85,18 @@ class ProductionProfiler:
                 "workload": workload_config["name"],
                 "config": workload_config,
                 "error": "Timeout expired",
+                "returncode": -1,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            }
+        except OSError as error:
+            return {
+                "workload": workload_config["name"],
+                "config": workload_config,
+                "error": str(error),
+                "stdout": "",
+                "stderr": str(error),
+                "returncode": 127,
+                "execution_time": time.time() - start_time,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
     

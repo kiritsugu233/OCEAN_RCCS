@@ -670,6 +670,7 @@ class MemoryTieringEngine:
         
     def _generate_hotness_impact_report(self, output_path: Path):
         """Generate report showing how hotness affects performance on different endpoints"""
+        import matplotlib.pyplot as plt
         
         # Create a summary of how endpoint hotness correlates with performance
         hotness_performance_data = []
