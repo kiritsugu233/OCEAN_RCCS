@@ -122,7 +122,9 @@ Transfer input contains:
   `transfer_granularity_bytes`;
 - trust: optional `provenance`.
 
-Service output contains the required timing decomposition plus `direction`:
+Service output additively preserves the source identity fields `request_id`,
+`object_id`, `object_type`, `phase`, and `layer_id`; older readers may ignore
+them. It also contains the required timing decomposition plus `direction`:
 `event_id`, `endpoint_id`, `issue_time_ns`, `service_start_ns`,
 `service_end_ns`, `queue_delay_ns`, `base_latency_ns`, `media_latency_ns`,
 `topology_latency_ns`, `bandwidth_delay_ns`, `congestion_delay_ns`,
@@ -134,6 +136,11 @@ FNV-1a content fingerprints for the hardware profile and input trace, effective
 topology, transfer granularity, and controller/decoder/expander call counters.
 A core test requires all three counters to be positive. Backend initialization
 or routing failures are fatal; the CLI never silently falls back.
+
+The service equation and routing do not inspect `object_type`. Dense weights,
+KV cache, MoE experts, LoRA adapters, and activations therefore receive the
+same treatment for identical byte/address/direction/timestamp requests; the
+identity copy exists only for downstream mixed-data attribution.
 
 The hardware YAML supports direct/staged path, latency components, read/write,
 GPU-link and local-DRAM bandwidth, capacity, expander count, switch hops,

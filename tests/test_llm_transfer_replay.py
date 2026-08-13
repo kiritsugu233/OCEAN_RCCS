@@ -370,6 +370,50 @@ class LLMTransferReplayTests(unittest.TestCase):
         )
         self.assertTrue(any(row["capacity_hit"] == "false" for row in capacity))
 
+    def test_all_llm_object_types_preserve_identity_without_changing_service(self) -> None:
+        source = REPO / "examples" / "llm_transfer_replay" / "transfer-events.csv"
+        trace = self.build / "all-object-types.csv"
+        with source.open(newline="") as handle:
+            reader = csv.DictReader(handle)
+            template = next(reader)
+            fields = reader.fieldnames
+        rows = []
+        object_types = ["weight", "kv_cache", "moe_expert", "lora", "activation"]
+        for index, object_type in enumerate(object_types):
+            row = dict(template)
+            row["event_id"] = f"identity-{index}"
+            row["request_id"] = f"request-{index}"
+            row["object_id"] = f"object-{object_type}"
+            row["object_type"] = object_type
+            row["phase"] = "prefill"
+            row["layer_id"] = str(index)
+            row["logical_address"] = "0"
+            row["bytes"] = "4096"
+            row["transfer_granularity_bytes"] = "4096"
+            row["dependency_ids"] = "[]"
+            rows.append(row)
+        with trace.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            writer.writerows(rows)
+        original = (
+            REPO / "examples" / "llm_transfer_replay" / "ocean-hardware-profile.yaml"
+        ).read_text()
+        profile = self.build / "identity-no-contention.yaml"
+        profile.write_text(original.replace("congestion_model: fifo", "congestion_model: none"))
+        service, metadata = self.run_trace(
+            trace, profile, backend="cxlmemsim-core", mode="aggregate"
+        )
+        self.assertEqual([row["object_type"] for row in service], object_types)
+        self.assertEqual(
+            [row["object_id"] for row in service],
+            [f"object-{name}" for name in object_types],
+        )
+        self.assertEqual(
+            len({row["total_service_time_ns"] for row in service}), 1
+        )
+        self.assertEqual(metadata["controller_service_calls"], len(object_types))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -69,6 +69,11 @@ struct TransferRequest {
 struct ServiceEvent {
     int schema_version = 1;
     std::string event_id;
+    std::string request_id;
+    std::string object_id;
+    std::string object_type;
+    std::string phase;
+    int64_t layer_id = -1;
     std::string endpoint_id;
     uint32_t port_id = 0;
     std::string direction;

@@ -526,6 +526,11 @@ std::vector<ServiceEvent> TensorTransferModel::replay(const std::vector<Transfer
 
             ServiceEvent event;
             event.event_id = request.event_id;
+            event.request_id = request.request_id;
+            event.object_id = request.object_id;
+            event.object_type = request.object_type;
+            event.phase = request.phase;
+            event.layer_id = request.layer_id;
             event.endpoint_id =
                 "expander-" + std::to_string(completion.endpoint_id) + "-port-" + std::to_string(completion.port_id);
             event.port_id = completion.port_id;
@@ -633,6 +638,11 @@ std::vector<ServiceEvent> TensorTransferModel::replay(const std::vector<Transfer
             modeled_bytes > profile_.capacity_bytes - std::min(request.logical_address, profile_.capacity_bytes);
         ServiceEvent event;
         event.event_id = request.event_id;
+        event.request_id = request.request_id;
+        event.object_id = request.object_id;
+        event.object_type = request.object_type;
+        event.phase = request.phase;
+        event.layer_id = request.layer_id;
         event.endpoint_id = "expander-" + std::to_string(endpoint) + "-port-" + std::to_string(lane);
         event.port_id = static_cast<uint32_t>(lane);
         event.direction = request.direction;
@@ -670,7 +680,7 @@ void writeServiceEventsCsv(const std::string &path, const std::vector<ServiceEve
     std::ofstream output(path);
     if (!output)
         throw std::runtime_error("cannot create service event output: " + path);
-    output << "schema_version,event_id,endpoint_id,port_id,direction,issue_time_"
+    output << "schema_version,event_id,request_id,object_id,object_type,phase,layer_id,endpoint_id,port_id,direction,issue_time_"
               "ns,service_start_ns,service_end_ns,"
               "queue_delay_ns,base_latency_ns,media_latency_ns,topology_latency_"
               "ns,bandwidth_delay_ns,"
@@ -680,8 +690,10 @@ void writeServiceEventsCsv(const std::string &path, const std::vector<ServiceEve
               "assumptions,provenance\n";
     output << std::setprecision(17);
     for (const auto &event : events) {
-        output << event.schema_version << ',' << csvEscape(event.event_id) << ',' << csvEscape(event.endpoint_id) << ','
-               << event.port_id << ',' << csvEscape(event.direction) << ',' << event.issue_time_ns << ','
+        output << event.schema_version << ',' << csvEscape(event.event_id) << ',' << csvEscape(event.request_id) << ','
+               << csvEscape(event.object_id) << ',' << csvEscape(event.object_type) << ',' << csvEscape(event.phase)
+               << ',' << event.layer_id << ',' << csvEscape(event.endpoint_id) << ',' << event.port_id << ','
+               << csvEscape(event.direction) << ',' << event.issue_time_ns << ','
                << event.service_start_ns << ',' << event.service_end_ns << ',' << event.queue_delay_ns << ','
                << event.base_latency_ns << ',' << event.media_latency_ns << ',' << event.topology_latency_ns << ','
                << event.bandwidth_delay_ns << ',' << event.congestion_delay_ns << ',' << event.total_service_time_ns
