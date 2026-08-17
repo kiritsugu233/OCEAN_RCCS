@@ -1,4 +1,6 @@
 *gromacs*
+state/h100-preflight/
+slurm-ocean-h100-preflight-*.out
 workloads/gromacs/gromacs-2025.3.tar.gz
 workloads/gromacs/gromacs-2025.3/.black.toml
 workloads/gromacs/gromacs-2025.3/.clang-format
