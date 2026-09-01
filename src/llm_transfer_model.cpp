@@ -425,6 +425,16 @@ std::vector<TransferRequest> loadTransferRequestsCsv(const std::string &path) {
             TransferRequest request;
             request.schema_version = static_cast<int>(parseUnsigned(get(row, "schema_version"), "schema_version"));
             request.event_id = get(row, "event_id");
+            if (columns.contains("logical_access_id"))
+                request.logical_access_id = get(row, "logical_access_id");
+            if (columns.contains("placement_decision_id"))
+                request.placement_decision_id = get(row, "placement_decision_id");
+            if (columns.contains("need_event_id"))
+                request.need_event_id = get(row, "need_event_id");
+            if (columns.contains("reason_class"))
+                request.reason_class = get(row, "reason_class");
+            if (columns.contains("reason_detail"))
+                request.reason_detail = get(row, "reason_detail");
             request.request_id = get(row, "request_id");
             request.object_id = get(row, "object_id");
             request.object_type = get(row, "object_type");
@@ -526,6 +536,11 @@ std::vector<ServiceEvent> TensorTransferModel::replay(const std::vector<Transfer
 
             ServiceEvent event;
             event.event_id = request.event_id;
+            event.logical_access_id = request.logical_access_id;
+            event.placement_decision_id = request.placement_decision_id;
+            event.need_event_id = request.need_event_id;
+            event.reason_class = request.reason_class;
+            event.reason_detail = request.reason_detail;
             event.request_id = request.request_id;
             event.object_id = request.object_id;
             event.object_type = request.object_type;
@@ -638,6 +653,11 @@ std::vector<ServiceEvent> TensorTransferModel::replay(const std::vector<Transfer
             modeled_bytes > profile_.capacity_bytes - std::min(request.logical_address, profile_.capacity_bytes);
         ServiceEvent event;
         event.event_id = request.event_id;
+        event.logical_access_id = request.logical_access_id;
+        event.placement_decision_id = request.placement_decision_id;
+        event.need_event_id = request.need_event_id;
+        event.reason_class = request.reason_class;
+        event.reason_detail = request.reason_detail;
         event.request_id = request.request_id;
         event.object_id = request.object_id;
         event.object_type = request.object_type;
@@ -680,7 +700,7 @@ void writeServiceEventsCsv(const std::string &path, const std::vector<ServiceEve
     std::ofstream output(path);
     if (!output)
         throw std::runtime_error("cannot create service event output: " + path);
-    output << "schema_version,event_id,request_id,object_id,object_type,phase,layer_id,endpoint_id,port_id,direction,issue_time_"
+    output << "schema_version,event_id,logical_access_id,placement_decision_id,need_event_id,reason_class,reason_detail,request_id,object_id,object_type,phase,layer_id,endpoint_id,port_id,direction,issue_time_"
               "ns,service_start_ns,service_end_ns,"
               "queue_delay_ns,base_latency_ns,media_latency_ns,topology_latency_"
               "ns,bandwidth_delay_ns,"
@@ -690,7 +710,10 @@ void writeServiceEventsCsv(const std::string &path, const std::vector<ServiceEve
               "assumptions,provenance\n";
     output << std::setprecision(17);
     for (const auto &event : events) {
-        output << event.schema_version << ',' << csvEscape(event.event_id) << ',' << csvEscape(event.request_id) << ','
+        output << event.schema_version << ',' << csvEscape(event.event_id) << ',' << csvEscape(event.logical_access_id)
+               << ',' << csvEscape(event.placement_decision_id) << ',' << csvEscape(event.need_event_id) << ','
+               << csvEscape(event.reason_class) << ',' << csvEscape(event.reason_detail) << ','
+               << csvEscape(event.request_id) << ','
                << csvEscape(event.object_id) << ',' << csvEscape(event.object_type) << ',' << csvEscape(event.phase)
                << ',' << event.layer_id << ',' << csvEscape(event.endpoint_id) << ',' << event.port_id << ','
                << csvEscape(event.direction) << ',' << event.issue_time_ns << ','
@@ -716,6 +739,7 @@ void writeReplayMetadataJson(const std::string &path, const HardwareProfile &pro
     double queue = 0.0;
     double service = 0.0;
     size_t capacity_misses = 0;
+    size_t identity_complete_events = 0;
     for (const auto &event : events) {
         requested += event.requested_bytes;
         modeled += event.modeled_bytes;
@@ -723,6 +747,9 @@ void writeReplayMetadataJson(const std::string &path, const HardwareProfile &pro
         service += event.total_service_time_ns;
         if (!event.capacity_hit)
             ++capacity_misses;
+        if (!event.logical_access_id.empty() && !event.placement_decision_id.empty() && !event.need_event_id.empty() &&
+            !event.reason_class.empty())
+            ++identity_complete_events;
     }
     output << std::setprecision(17) << "{\n"
            << "  \"schema_version\": 1,\n"
@@ -740,6 +767,7 @@ void writeReplayMetadataJson(const std::string &path, const HardwareProfile &pro
            << "  \"expander_service_calls\": " << evidence.expander_service_calls << ",\n"
            << "  \"chunk_count\": " << evidence.chunk_count << ",\n"
            << "  \"event_count\": " << events.size() << ",\n"
+           << "  \"identity_complete_events\": " << identity_complete_events << ",\n"
            << "  \"requested_bytes\": " << requested << ",\n"
            << "  \"modeled_bytes\": " << modeled << ",\n"
            << "  \"queue_delay_ns\": " << queue << ",\n"

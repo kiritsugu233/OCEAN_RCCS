@@ -44,6 +44,11 @@ struct HardwareProfile {
 struct TransferRequest {
     int schema_version = 1;
     std::string event_id;
+    std::string logical_access_id;
+    std::string placement_decision_id;
+    std::string need_event_id;
+    std::string reason_class;
+    std::string reason_detail;
     std::string request_id;
     std::string object_id;
     std::string object_type;
@@ -69,6 +74,11 @@ struct TransferRequest {
 struct ServiceEvent {
     int schema_version = 1;
     std::string event_id;
+    std::string logical_access_id;
+    std::string placement_decision_id;
+    std::string need_event_id;
+    std::string reason_class;
+    std::string reason_detail;
     std::string request_id;
     std::string object_id;
     std::string object_type;

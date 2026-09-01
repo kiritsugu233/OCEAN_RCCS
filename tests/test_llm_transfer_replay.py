@@ -414,6 +414,44 @@ class LLMTransferReplayTests(unittest.TestCase):
         )
         self.assertEqual(metadata["controller_service_calls"], len(object_types))
 
+    def test_phase3_access_decision_need_and_reason_identity_round_trip(self) -> None:
+        source = REPO / "examples" / "llm_transfer_replay" / "transfer-events.csv"
+        trace = self.build / "phase3-identity.csv"
+        with source.open(newline="") as handle:
+            reader = csv.DictReader(handle)
+            row = next(reader)
+            fields = list(reader.fieldnames or [])
+        additions = [
+            "logical_access_id",
+            "placement_decision_id",
+            "need_event_id",
+            "reason_class",
+            "reason_detail",
+        ]
+        fields.extend(name for name in additions if name not in fields)
+        row.update(
+            {
+                "logical_access_id": "access-17",
+                "placement_decision_id": "decision-17",
+                "need_event_id": "kernel-17",
+                "reason_class": "miss",
+                "reason_detail": "capacity_lru_demand_miss",
+            }
+        )
+        with trace.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fields)
+            writer.writeheader()
+            writer.writerow(row)
+        profile = (
+            REPO / "examples" / "llm_transfer_replay" / "ocean-hardware-profile.yaml"
+        )
+        service, metadata = self.run_trace(
+            trace, profile, backend="cxlmemsim-core", mode="aggregate"
+        )
+        for name in additions:
+            self.assertEqual(service[0][name], row[name])
+        self.assertEqual(metadata["identity_complete_events"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
