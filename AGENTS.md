@@ -42,3 +42,67 @@
 - Shared memory size and base are configured by server; avoid hardcoding `/dev/shm` offsets.
 - Log levels via `SPDLOG_LEVEL` (e.g., `info`, `debug`) for reproducible reports.
 
+## LLM Offloading Extension Rules
+
+These rules supplement the original OCEAN repository guidelines. They do not
+replace upstream behavior, APIs, tests, or coding conventions.
+
+1. OCEAN remains a general-purpose CXL-memory simulator. LLM weight/KV
+   offloading support must be additive and must not silently change existing
+   non-LLM behavior.
+
+2. The LLM integration consumes logical transfer/replay inputs with stable
+   request, object, access, placement, transfer, and dependency identity.
+   Preserve these identities through ingestion, scheduling, service, and output.
+
+3. OCEAN owns modeled memory-service, queueing, contention, and topology time.
+   Execution-DAG replay may propagate dependencies but must not add the same
+   service time a second time.
+
+4. Measured completion times, transfer waits, or final LLM performance results
+   must never be replayed as simulator answers. They are calibration or
+   evaluation targets outside the modeled execution path.
+
+5. Preserve provenance:
+
+   - local NUMA measurement: `measured_local_numa`
+   - remote NUMA observation: `measured_remote_numa_proxy`
+   - CXLMemSim/CXL-link result: `modeled_cxl_link`
+   - physical CXL measurement: only when real CXL hardware produced it
+
+   Modeled, NUMA-proxy, QEMU, or TCP results must never be described as physical
+   CXL measurements.
+
+6. Preserve existing OCEAN public APIs, protocols, demos, and upstream tests.
+   Any incompatible change requires explicit user approval and a versioned
+   compatibility migration.
+
+7. Do not modify Phase 4 case identities, calibration/validation splits,
+   held-out sealing, scientific thresholds, or Slurm launch policy from this
+   repository. Those contracts are owned by the main `cxl-llm-step1` repository.
+
+8. Keep the two repositories independent:
+
+   - use OCEAN branch `agent/ocean-core-kv-weight-replay`;
+   - verify `git remote -v`, branch, upstream, HEAD, and working tree before work;
+   - never mix main-repository and OCEAN commits;
+   - never force-push, use `reset --hard`, or overwrite user changes.
+
+9. LLM-related changes must be surgical. Do not perform opportunistic refactors,
+   broad formatting, API cleanup, dependency upgrades, or unrelated performance
+   changes. Format only files or ranges required by the approved change.
+
+10. Before editing, list the expected files and justify each one. Pause for user
+    approval before commit if the change exceeds 8 tracked files or 500 total
+    added/deleted lines, or if it touches code outside the stated boundary.
+
+11. Every OCEAN LLM change must include focused regression tests proving:
+
+    - identity preservation;
+    - no service-time double counting;
+    - deterministic replay;
+    - correct failure retention;
+    - unchanged non-LLM behavior.
+
+12. Passing tests does not justify expanded scope. Prefer the smallest
+    implementation that enforces the approved invariant.
